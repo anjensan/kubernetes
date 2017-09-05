@@ -151,20 +151,10 @@ var _ = SIGDescribe("Load capacity", func() {
 	}
 
 	loadTests := []Load{
-		// The container will consume 1 cpu and 512mb of memory.
-		{podsPerNode: 3, image: "jess/stress", command: []string{"stress", "-c", "1", "-m", "2"}, kind: api.Kind("ReplicationController")},
+		// LOAD1
+		{podsPerNode: 10, image: framework.ServeHostnameImage, kind: api.Kind("ReplicationController")},
+		// LOAD2 - ...
 		{podsPerNode: 30, image: framework.ServeHostnameImage, kind: api.Kind("ReplicationController")},
-		// Tests for other resource types
-		{podsPerNode: 30, image: framework.ServeHostnameImage, kind: extensions.Kind("Deployment")},
-		{podsPerNode: 30, image: framework.ServeHostnameImage, kind: batch.Kind("Job")},
-		// Test scheduling when daemons are preset
-		{podsPerNode: 30, image: framework.ServeHostnameImage, kind: api.Kind("ReplicationController"), daemonsPerNode: 2},
-		// Test with secrets
-		{podsPerNode: 30, image: framework.ServeHostnameImage, kind: extensions.Kind("Deployment"), secretsPerPod: 2},
-		// Test with configmaps
-		{podsPerNode: 30, image: framework.ServeHostnameImage, kind: extensions.Kind("Deployment"), configMapsPerPod: 2},
-		// Special test case which randomizes created resources
-		{podsPerNode: 30, image: framework.ServeHostnameImage, kind: randomKind},
 	}
 
 	for _, testArg := range loadTests {
@@ -266,19 +256,15 @@ var _ = SIGDescribe("Load capacity", func() {
 			createAllResources(configs, creatingTime)
 			By("============================================================================")
 
-			// We would like to spread scaling replication controllers over time
-			// to make it possible to create/schedule & delete them in the meantime.
-			// Currently we assume that <throughput> pods/second average throughput.
-			// The expected number of created/deleted pods is less than totalPods/3.
-			scalingTime := time.Duration(totalPods/(3*throughput)) * time.Second
-			framework.Logf("Starting to scale ReplicationControllers first time...")
-			scaleAllResources(configs, scalingTime)
-			By("============================================================================")
+			// Run 10 steps, each step takes 1 minute.
+			for step := 0; step < 10; step++ {
+				starttime := time.Now()
+				// FIXME: hardcode scaling time to 20 secs :)
+				scaleAllResources(configs, 20*time.Second)
+				time.Sleep(starttime.Add(time.Minute).Sub(time.Now()))
+			}
 
-			framework.Logf("Starting to scale ReplicationControllers second time...")
-			scaleAllResources(configs, scalingTime)
 			By("============================================================================")
-
 			// Cleanup all created replication controllers.
 			// Currently we assume <throughput> pods/second average deletion throughput.
 			// We may want to revisit it in the future.
